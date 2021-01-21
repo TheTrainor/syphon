@@ -4,7 +4,6 @@ import 'dart:collection';
 // Package imports:
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
-import 'package:syphon/global/algos.dart';
 import 'package:syphon/global/print.dart';
 
 // Project imports:
@@ -121,7 +120,7 @@ class Room {
     this.syncing = false,
     this.sending = false,
     this.limited = false,
-    this.draft = null,
+    this.draft,
     this.userIds = const [],
     this.outbox = const [],
     this.usersNew = const {},
@@ -246,6 +245,46 @@ class Room {
     }
   }
 
+  Room fromEvents({
+    User currentUser,
+    String lastSince,
+    Map<String, dynamic> events,
+    Map<String, dynamic> options,
+  }) {
+    bool invite = options['invite'];
+    bool limited = options['limited'];
+    String lastHash = options['lastHash'];
+    String prevHash = options['prevHash'] ?? this.prevHash;
+
+    List<Event> stateEvents = events['stateEvents'];
+    List<Event> accountEvents = events['accountEvents'];
+    List<Message> messageEvents = events['messageEvents'];
+    List<Event> ephemeralEvents = events['ephemeralEvents'];
+    List<Reaction> reactionEvents = events['reactionEvents'];
+
+    return this
+        .fromAccountData(
+          accountEvents,
+        )
+        .fromStateEvents(
+          invite: invite,
+          limited: limited,
+          events: stateEvents,
+          currentUser: currentUser,
+          reactions: reactionEvents,
+        )
+        .fromMessageEvents(
+          messages: messageEvents,
+          lastHash: lastHash,
+          prevHash: prevHash,
+          nextHash: lastSince,
+        )
+        .fromEphemeralEvents(
+          events: ephemeralEvents,
+          currentUser: currentUser,
+        );
+  }
+
   Room fromSync({
     User currentUser,
     String lastSince,
@@ -266,16 +305,18 @@ class Room {
     if (json['state'] != null) {
       final List<dynamic> stateEventsRaw = json['state']['events'];
 
-      stateEvents =
-          stateEventsRaw.map((event) => Event.fromMatrix(event)).toList();
+      stateEvents = List.from(
+        stateEventsRaw.map((event) => Event.fromMatrix(event)),
+      );
     }
 
     if (json['invite_state'] != null) {
       final List<dynamic> stateEventsRaw = json['invite_state']['events'];
 
-      stateEvents =
-          stateEventsRaw.map((event) => Event.fromMatrix(event)).toList();
       invite = true;
+      stateEvents = List.from(
+        stateEventsRaw.map((event) => Event.fromMatrix(event)),
+      );
     }
 
     // Find state and message updates from timeline
@@ -301,9 +342,13 @@ class Room {
         switch (event.type) {
           case EventTypes.message:
           case EventTypes.encrypted:
-            messageEvents.add(Message.fromEvent(event));
+            // deleted messages check
+            if ((event.content as Map).keys.length > 0) {
+              messageEvents.add(Message.fromEvent(event));
+            }
             break;
           case EventTypes.reaction:
+            // deleted messages check
             if ((event.content as Map).keys.length > 0) {
               reactionEvents.add(Reaction.fromEvent(event));
             }

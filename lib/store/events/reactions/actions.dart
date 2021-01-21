@@ -13,10 +13,8 @@ import 'package:redux_thunk/redux_thunk.dart';
 // Project imports:
 import 'package:syphon/global/libs/matrix/index.dart';
 import 'package:syphon/store/events/actions.dart';
-import 'package:syphon/store/events/model.dart';
 import 'package:syphon/store/index.dart';
 import 'package:syphon/store/rooms/actions.dart';
-import 'package:syphon/global/libs/matrix/constants.dart';
 import 'package:syphon/store/events/messages/model.dart';
 import 'package:syphon/store/rooms/room/model.dart';
 
@@ -33,8 +31,6 @@ ThunkAction<AppState> toggleReaction({
     final reaction = message.reactions.firstWhere(
         (reaction) => reaction.sender == user.userId && reaction.body == emoji,
         orElse: () => null);
-
-    print('${emoji} ${reaction.id} ${reaction.body}');
 
     if (reaction == null) {
       store.dispatch(sendReaction(message: message, room: room, emoji: emoji));

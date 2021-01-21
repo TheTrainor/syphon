@@ -14,6 +14,7 @@ import 'package:syphon/global/libs/matrix/constants.dart';
 import 'package:syphon/global/print.dart';
 import 'package:syphon/storage/index.dart';
 import 'package:syphon/store/events/messages/model.dart';
+import 'package:syphon/store/events/parsers.dart';
 import 'package:syphon/store/events/reactions/model.dart';
 import 'package:syphon/store/events/storage.dart';
 
@@ -124,69 +125,90 @@ ThunkAction<AppState> syncRooms(Map roomData) {
 
     // update those that exist or add a new room
     return await Future.forEach(roomData.keys, (id) async {
-      final json = roomData[id];
-      // use pre-existing values where available
-      Room room = rooms.containsKey(id) ? rooms[id] : Room(id: id);
+      try {
+        final json = roomData[id];
+        // use pre-existing values where available
+        Room room = rooms.containsKey(id) ? rooms[id] : Room(id: id);
 
-      // First past to decrypt encrypted events
-      if (room.encryptionEnabled) {
-        // reassign the mapped decrypted evets to the json timeline
-        json['timeline']['events'] = await store.dispatch(
-          decryptEvents(room, json),
+        // First past to decrypt encrypted events
+        if (room.encryptionEnabled) {
+          // reassign the mapped decrypted evets to the json timeline
+          json['timeline']['events'] = await store.dispatch(
+            decryptEvents(room, json),
+          );
+        }
+
+        // TODO: replace room.fromSync with below
+        // final users = parseUsers(json);
+        // final events = parseEvents(json);
+        // final options = parseOptions(json);
+        // final messages = parseMessages(json);
+
+        // this to handle parsing users and messages properly
+        // room = room.fromEvents(
+        //   currentUser: user,
+        //   events: events,
+        //   options: options,
+        //   lastSince: lastSince,
+        // );
+
+        // TODO: eventually remove the need for and replace with above
+        room = room.fromSync(
+          json: json,
+          currentUser: user,
+          lastSince: lastSince,
         );
-      }
 
-      // TODO: eventually remove the need for this with modular parsers
-      room = room.fromSync(
-        json: json,
-        currentUser: user,
-        lastSince: lastSince,
-      );
+        printDebug(
+          '[syncRooms] ${room.name} ids ${room.messagesNew.length} | messages ${room.messageIds.length}',
+        );
 
-      printDebug(
-        '[syncRooms] ${room.name} ids ${room.messagesNew.length} | messages ${room.messageIds.length}',
-      );
+        // update cold storage
+        await Future.wait([
+          saveUsers(room.usersNew, storage: Storage.main),
+          saveRooms({room.id: room}, storage: Storage.main),
+          saveMessages(room.messagesNew, storage: Storage.main),
+          saveReactions(room.reactions, storage: Storage.main),
+          // saveRedactions(events['redactionEvents'], storage: Storage.main),
+        ]);
 
-      // update cold storage
-      await Future.wait([
-        saveUsers(room.usersNew, storage: Storage.main),
-        saveRooms({room.id: room}, storage: Storage.main),
-        saveMessages(room.messagesNew, storage: Storage.main),
-        saveReactions(room.reactions, storage: Storage.main),
-      ]);
+        // update store
+        await store.dispatch(setUsers(room.usersNew));
+        await store
+            .dispatch(setMessages(room: room, messages: room.messagesNew));
+        await store.dispatch(setReactions(reactions: room.reactions ?? []));
+        // await store.dispatch(setRedactions(redactions: events['redactions']));
 
-      // update store
-      await store.dispatch(setUsers(room.usersNew));
-      await store.dispatch(setMessages(room: room, messages: room.messagesNew));
-      await store.dispatch(setReactions(reactions: room.reactions));
+        // TODO: remove with parsers - clear users from parsed room objects
+        room = room.copyWith(
+          users: Map<String, User>(),
+          messagesNew: List<Message>(),
+          reactions: List<Reaction>(),
+        );
 
-      // TODO: remove with parsers - clear users from parsed room objects
-      room = room.copyWith(
-        users: Map<String, User>(),
-        messagesNew: List<Message>(),
-        reactions: List<Reaction>(),
-      );
+        // update room
+        store.dispatch(SetRoom(room: room));
 
-      // update room
-      store.dispatch(SetRoom(room: room));
+        // fetch avatar if a uri was found
+        if (room.avatarUri != null) {
+          store.dispatch(fetchThumbnail(
+            mxcUri: room.avatarUri,
+          ));
+        }
 
-      // fetch avatar if a uri was found
-      if (room.avatarUri != null) {
-        store.dispatch(fetchThumbnail(
-          mxcUri: room.avatarUri,
-        ));
-      }
-
-      // and is not already at the end of the last known batch
-      // the end would be room.prevHash == room.lastHash
-      // fetch previous messages since last /sync (a gap)
-      // determined by the fromSync function of room
-      final roomUpdated = store.state.roomStore.rooms[room.id];
-      if (roomUpdated != null && room.limited) {
-        store.dispatch(fetchMessageEvents(
-          room: room,
-          from: room.prevHash,
-        ));
+        // and is not already at the end of the last known batch
+        // the end would be room.prevHash == room.lastHash
+        // fetch previous messages since last /sync (a gap)
+        // determined by the fromSync function of room
+        final roomUpdated = store.state.roomStore.rooms[room.id];
+        if (roomUpdated != null && room.limited) {
+          store.dispatch(fetchMessageEvents(
+            room: room,
+            from: room.prevHash,
+          ));
+        }
+      } catch (error) {
+        printError(error.toString());
       }
     });
   };

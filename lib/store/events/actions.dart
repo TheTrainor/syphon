@@ -9,14 +9,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:redux/redux.dart';
 import 'package:redux_thunk/redux_thunk.dart';
-import 'package:syphon/global/algos.dart';
 
 // Project imports:
 import 'package:syphon/global/libs/matrix/index.dart';
 import 'package:syphon/global/print.dart';
 import 'package:syphon/storage/index.dart';
-import 'package:syphon/store/alerts/actions.dart';
-import 'package:syphon/store/crypto/actions.dart';
 import 'package:syphon/store/crypto/events/actions.dart';
 import 'package:syphon/store/events/reactions/model.dart';
 import 'package:syphon/store/events/storage.dart';
@@ -49,6 +46,12 @@ class SetReactions {
   SetReactions({this.roomId, this.reactions});
 }
 
+class SetRedactions {
+  final String roomId;
+  final List<Event> redactions;
+  SetRedactions({this.roomId, this.redactions});
+}
+
 ThunkAction<AppState> setMessages({
   Room room,
   List<Message> messages,
@@ -64,6 +67,13 @@ ThunkAction<AppState> setReactions({
 }) =>
     (Store<AppState> store) {
       return store.dispatch(SetReactions(reactions: reactions));
+    };
+
+ThunkAction<AppState> setRedactions({
+  List<Event> redactions,
+}) =>
+    (Store<AppState> store) {
+      return store.dispatch(SetRedactions(redactions: redactions));
     };
 
 /**
@@ -422,19 +432,13 @@ ThunkAction<AppState> redactEvent({
 }) {
   return (Store<AppState> store) async {
     try {
-      print(room.id);
-      print(room.id);
-      print(event.content);
-
-      final result = await MatrixApi.redactEvent(
+      await MatrixApi.redactEvent(
         trxId: DateTime.now().millisecond.toString(),
         accessToken: store.state.authStore.user.accessToken,
         homeserver: store.state.authStore.user.homeserver,
         roomId: room.id,
         eventId: event.id,
       );
-
-      print(result);
     } catch (error) {
       debugPrint('[deleteMessage] $error');
     }

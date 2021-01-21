@@ -34,6 +34,7 @@ EventStore eventReducer(
       return state.copyWith(
         reactions: reactionsUpdated,
       );
+
     case SetMessages:
       final roomId = action.roomId;
       final messages = Map<String, List<Message>>.from(state.messages);
@@ -54,6 +55,23 @@ EventStore eventReducer(
 
       return state.copyWith(messages: messages);
 
+    case SetRedactions:
+      final messages = Map<String, List<Message>>.from(state.messages);
+      final reactions = Map<String, List<Reaction>>.from(state.reactions);
+
+      final roomId = action.roomId;
+      final redactions = action.redactions;
+
+      for (Event redaction in redactions) {
+        final roomMessages = messages[roomId];
+
+        // TODO: remove based on reaction event id
+        final messageId =
+            roomMessages.indexWhere((event) => event.id == redaction.id);
+        final reactionId = reactions[redaction.id];
+      }
+
+      return state.copyWith();
     case ResetEvents:
       return EventStore();
     default:

@@ -64,7 +64,6 @@ class Reaction extends Event {
 
   factory Reaction.fromEvent(Event event) {
     final content = event.content['m.relates_to'] ?? {};
-    print("${event.content} ${event.type}");
     return Reaction(
       id: event.id,
       userId: event.userId,
@@ -80,7 +79,8 @@ class Reaction extends Event {
   }
 
   factory Reaction.fromMatrix(Map<String, dynamic> json) {
-    final relations = json['content']['m.relates_to'];
+    final relations =
+        json['content'] != null ? json['content']['m.relates_to'] : {};
     return Reaction(
       id: json['event_id'] as String,
       userId: json['user_id'] as String,

@@ -1,6 +1,7 @@
 // Package imports:
 import 'package:json_annotation/json_annotation.dart';
 import 'package:syphon/global/algos.dart';
+import 'package:syphon/global/libs/matrix/constants.dart';
 
 part 'model.g.dart';
 
@@ -55,6 +56,10 @@ class Event {
   factory Event.fromJson(Map<String, dynamic> json) => _$EventFromJson(json);
 
   factory Event.fromMatrix(Map<String, dynamic> json) {
+    if (json['type'] == EventTypes.redaction ||
+        json['type'] == EventTypes.reaction) {
+      printJson(json);
+    }
     return Event(
       id: json['event_id'] as String,
       userId: json['user_id'] as String,

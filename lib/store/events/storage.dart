@@ -26,6 +26,46 @@ Future<void> saveEvents(
   });
 }
 
+Future<void> deleteEvents(
+  List<Event> events, {
+  Database storage,
+}) async {
+  final stores = [
+    StoreRef<String, String>(MESSAGES),
+    StoreRef<String, String>(REACTIONS),
+  ];
+
+  return await Future.wait(stores.map((store) async {
+    return await storage.transaction((txn) async {
+      for (Event event in events) {
+        final record = store.record(event.id);
+        await record.delete(storage);
+      }
+    });
+  }));
+}
+
+Future<void> saveRedactions(
+  List<Event> redactions, {
+  Database storage,
+}) async {
+  final messages = StoreRef<String, String>(MESSAGES);
+  await storage.transaction((txn) async {
+    for (Event redaction in redactions) {
+      final record = messages.record(redaction.id);
+      await record.delete(storage);
+    }
+  });
+
+  final reactions = StoreRef<String, String>(REACTIONS);
+  await storage.transaction((txn) async {
+    for (Event redaction in redactions) {
+      final record = reactions.record(redaction.id);
+      final updated = await record.get(storage);
+    }
+  });
+}
+
 ///
 /// Save Reactions
 ///
